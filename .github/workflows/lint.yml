@@ -1,0 +1,80 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: [self-hosted, cpu]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Apply sgl-model-gateway patch
+        run: |
+          SGLANG_DIR="lib/sglang"
+          git -C "$SGLANG_DIR" checkout -- .
+          git -C "$SGLANG_DIR" clean -fd sgl-model-gateway/bindings/golang/
+          git -C "$SGLANG_DIR" apply "$(pwd)/patches/sgl-model-gateway/sgl_model_gateway_820e97d6.patch"
+
+      - name: Compute cache key
+        id: cache-key
+        run: |
+          KEY="tokenizers-${{ runner.os }}-$(git submodule status lib/sglang | awk '{print $1}' | tr -d '+-')-$(find patches/sgl-model-gateway -type f | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
+          echo "key=${KEY}" >> $GITHUB_OUTPUT
+
+      - name: Cache tokenizer build artifact
+        id: cache-tokenizers
+        uses: actions/cache@v4
+        with:
+          path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Build tokenizer library in dev container
+        if: steps.cache-tokenizers.outputs.cache-hit != 'true'
+        run: ./scripts/build_tokenizers.sh --image ${{ env.DEV_IMAGE }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install protoc
+        run: |
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          if ! command -v protoc &> /dev/null && ! [ -x "$HOME/.local/bin/protoc" ]; then
+            PB_VER=28.3
+            curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
+            unzip -o "protoc-${PB_VER}-linux-x86_64.zip" -d "$HOME/.local"
+            rm "protoc-${PB_VER}-linux-x86_64.zip"
+          fi
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+      - name: Run lint
+        run: |
+          make lint
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .

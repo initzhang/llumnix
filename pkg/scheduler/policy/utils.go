@@ -27,8 +27,8 @@ func verifyConfig(c *options.SchedulerConfig) {
 }
 
 func verifySchedulingPolicy(c *options.SchedulerConfig) {
-	liteModeSchedulingPolicySet := sets.NewString(consts.SchedulingPolicyLoadBalance)
-	fullModeSchedulingPolicySet := sets.NewString(
+	liteModeSchedulingPolicySet := sets.New[string](consts.SchedulingPolicyLoadBalance)
+	fullModeSchedulingPolicySet := sets.New[string](
 		consts.SchedulingPolicyLoadBalance,
 		consts.SchedulingPolicyFlood,
 		consts.SchedulingPolicySlo)
@@ -47,19 +47,19 @@ func verifySchedulingPolicy(c *options.SchedulerConfig) {
 
 func verifySchedulingFeature(c *options.SchedulerConfig) {
 	if !c.EnableFullModeScheduling {
-		if c.EnableCacheAwareScheduling == true {
+		if c.EnableCacheAwareScheduling {
 			c.EnableCacheAwareScheduling = false
 			klog.Warningf("The scheduling feature cache-aware scheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.EnablePredictorEnhancedScheduling == true {
+		if c.EnablePredictorEnhancedScheduling {
 			c.EnablePredictorEnhancedScheduling = false
 			klog.Warningf("The scheduling feature predictor-enhanced scheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.EnableAdaptivePD == true {
+		if c.EnableAdaptivePD {
 			c.EnableAdaptivePD = false
 			klog.Warningf("The scheduling feature adaptive-pd is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.EnableRescheduling == true {
+		if c.EnableRescheduling {
 			c.EnableRescheduling = false
 			klog.Warningf("The scheduling feature rescheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
@@ -71,9 +71,9 @@ func verifySchedulingFeature(c *options.SchedulerConfig) {
 }
 
 func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
-	liteModeSchedulingMetricSet := sets.NewString(
+	liteModeSchedulingMetricSet := sets.New[string](
 		consts.SchedulingMetricNumRequests, consts.SchedulingMetricNumTokens)
-	fullModeSchedulingMetricSet := sets.NewString(
+	fullModeSchedulingMetricSet := sets.New[string](
 		consts.SchedulingMetricKVCacheUsageRatioProjected, consts.SchedulingMetricDecodeBatchSize,
 		consts.SchedulingMetricNumWaitingRequests, consts.SchedulingMetricAllPrefillsTokensNum,
 		consts.SchedulingMetricKVCacheHitLen, consts.SchedulingMetricCacheAwareAllPrefillsTokensNum,
@@ -178,9 +178,9 @@ func toClusterViewScheduling(cv clusterView) clusterViewScheduling {
 
 func getRemainingInstanceIds(
 	instanceViews map[string]*instanceViewScheduling,
-	filteredOutInstanceIds sets.String) sets.String {
+	filteredOutInstanceIds sets.Set[string]) sets.Set[string] {
 
-	allInstanceIds := sets.NewString()
+	allInstanceIds := sets.New[string]()
 	for id := range instanceViews {
 		allInstanceIds.Insert(id)
 	}

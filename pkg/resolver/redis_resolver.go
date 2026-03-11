@@ -65,9 +65,7 @@ func (r *redisResolver) GetLLMInstances() (types.LLMInstanceSlice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	instances := make(types.LLMInstanceSlice, 0, len(r.instances))
-	for idx := range r.instances {
-		instances = append(instances, r.instances[idx])
-	}
+	instances = append(instances, r.instances...)
 	return instances, nil
 }
 
@@ -119,7 +117,9 @@ func (r *redisResolver) refresh() {
 
 		if podInfo.TimestampMs < time.Now().UnixMilli()-int64(r.statusTTLMs) {
 			klog.Warningf("Pod info for %s is expired", podInfo.PodName)
-			r.redisClient.Del(r.ctx, PodInRedis[idx])
+			if err := r.redisClient.Del(r.ctx, PodInRedis[idx]); err != nil {
+				klog.Warningf("Failed to delete expired pod info %s: %v", PodInRedis[idx], err)
+			}
 			continue
 		}
 
@@ -131,9 +131,9 @@ func (r *redisResolver) refresh() {
 			}
 
 			newInstances = append(newInstances, types.LLMInstance{
-				Version: instance.Version,
-				ID:      fmt.Sprintf("%s_dp%d", podInfo.PodName, instance.DpRank),
-				Model:   instance.Model,
+				Version:   instance.Version,
+				ID:        fmt.Sprintf("%s_dp%d", podInfo.PodName, instance.DpRank),
+				Model:     instance.Model,
 				InferType: consts.InferType(instance.InstanceType),
 				Endpoint: types.Endpoint{
 					Host: instance.EntrypointIp,
